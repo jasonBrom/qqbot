@@ -1166,9 +1166,16 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
                   }
                 }
                 
-                // 判断是否使用 markdown 模式
-                const useMarkdown = account.markdownSupport === true;
-                log?.info(`[qqbot:${account.accountId}] Markdown mode: ${useMarkdown}, images: ${imageUrls.length}`);
+                // 根据消息来源选择回复模式：私聊强制 Markdown，群聊强制纯文本
+                // 频道保持原有配置开关，避免改变现有行为
+                const useMarkdown = event.type === "c2c"
+                  ? true
+                  : event.type === "group"
+                    ? false
+                    : account.markdownSupport === true;
+                log?.info(
+                  `[qqbot:${account.accountId}] Reply mode by source: type=${event.type}, markdown=${useMarkdown}, images=${imageUrls.length}`,
+                );
                 
                 let textWithoutImages = replyText;
                 
