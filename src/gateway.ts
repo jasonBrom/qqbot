@@ -1,4 +1,4 @@
-import WebSocket from "ws";
+import WebSocket from "./utils/ws.js";
 import path from "node:path";
 import * as fs from "node:fs";
 import type { ResolvedQQBotAccount, WSPayload, C2CMessageEvent, GuildMessageEvent, GroupMessageEvent } from "./types.js";
@@ -1419,7 +1419,7 @@ export async function startGateway(ctx: GatewayContext): Promise<void> {
 
       ws.on("message", async (data) => {
         try {
-          const rawData = data.toString();
+          const rawData = String(data);
           const payload = JSON.parse(rawData) as WSPayload;
           const { op, d, s, t } = payload;
 
