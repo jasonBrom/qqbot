@@ -294,17 +294,12 @@ function buildMessageBody(
   msgId: string | undefined,
   msgSeq: number
 ): Record<string, unknown> {
-  const body: Record<string, unknown> = currentMarkdownSupport
-    ? {
-        markdown: { content },
-        msg_type: 2,
-        msg_seq: msgSeq,
-      }
-    : {
-        content,
-        msg_type: 0,
-        msg_seq: msgSeq,
-      };
+  // 固定纯文本消息类型，避免 QQ 侧 markdown 兼容性问题
+  const body: Record<string, unknown> = {
+    content,
+    msg_type: 0,
+    msg_seq: msgSeq,
+  };
 
   if (msgId) {
     body.msg_id = msgId;
@@ -390,22 +385,15 @@ export async function sendGroupMessage(
  * 注意：主动消息不支持流式发送
  */
 function buildProactiveMessageBody(content: string): Record<string, unknown> {
-  // 主动消息内容校验（参考 Telegram 机制）
   if (!content || content.trim().length === 0) {
-    throw new Error("主动消息内容不能为空 (markdown.content is empty)");
+    throw new Error("主动消息内容不能为空");
   }
 
-  if (currentMarkdownSupport) {
-    return {
-      markdown: { content },
-      msg_type: 2,
-    };
-  } else {
-    return {
-      content,
-      msg_type: 0,
-    };
-  }
+  // 固定纯文本消息类型
+  return {
+    content,
+    msg_type: 0,
+  };
 }
 
 /**
@@ -566,6 +554,51 @@ export async function sendGroupMediaMessage(
   });
 }
 
+
+function guessImageMimeType(url: string, contentTypeHeader?: string | null): string {
+  const ct = (contentTypeHeader || "").toLowerCase();
+  if (ct.startsWith("image/")) return ct.split(";")[0];
+  const lower = url.toLowerCase();
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".gif")) return "image/gif";
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".bmp")) return "image/bmp";
+  return "image/png";
+}
+
+async function convertRemoteImageToDataUrl(imageUrl: string): Promise<string> {
+  const resp = await fetch(imageUrl);
+  if (!resp.ok) {
+    throw new Error(`下载云端图片失败: ${resp.status} ${resp.statusText}`);
+  }
+  const mime = guessImageMimeType(imageUrl, resp.headers.get("content-type"));
+  const arr = await resp.arrayBuffer();
+  const base64 = Buffer.from(arr).toString("base64");
+  return `data:${mime};base64,${base64}`;
+}
+
+async function normalizeImageToBase64Data(imageUrl: string): Promise<string> {
+  if (imageUrl.startsWith("data:image/")) {
+    const matches = imageUrl.match(/^data:([^;]+);base64,(.+)$/);
+    if (!matches) {
+      throw new Error("Invalid Base64 Data URL format");
+    }
+    return matches[2];
+  }
+
+  if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+    const dataUrl = await convertRemoteImageToDataUrl(imageUrl);
+    const matches = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    if (!matches) {
+      throw new Error("云端图片转 Base64 失败");
+    }
+    return matches[2];
+  }
+
+  throw new Error(`Unsupported image source: ${imageUrl.slice(0, 80)}`);
+}
+
 /**
  * 发送带图片的 C2C 单聊消息（封装上传+发送）
  * @param imageUrl - 图片来源，支持：
@@ -579,22 +612,8 @@ export async function sendC2CImageMessage(
   msgId?: string,
   content?: string
 ): Promise<{ id: string; timestamp: number }> {
-  let uploadResult: UploadMediaResponse;
-  
-  // 检查是否是 Base64 Data URL
-  if (imageUrl.startsWith("data:")) {
-    // 解析 Base64 Data URL: data:image/png;base64,xxxxx
-    const matches = imageUrl.match(/^data:([^;]+);base64,(.+)$/);
-    if (!matches) {
-      throw new Error("Invalid Base64 Data URL format");
-    }
-    const base64Data = matches[2];
-    // 使用 file_data 上传
-    uploadResult = await uploadC2CMedia(accessToken, openid, MediaFileType.IMAGE, undefined, base64Data, false);
-  } else {
-    // 公网 URL，使用 url 参数上传
-    uploadResult = await uploadC2CMedia(accessToken, openid, MediaFileType.IMAGE, imageUrl, undefined, false);
-  }
+  const base64Data = await normalizeImageToBase64Data(imageUrl);
+  const uploadResult = await uploadC2CMedia(accessToken, openid, MediaFileType.IMAGE, undefined, base64Data, false);
   
   // 发送富媒体消息
   return sendC2CMediaMessage(accessToken, openid, uploadResult.file_info, msgId, content);
@@ -613,22 +632,8 @@ export async function sendGroupImageMessage(
   msgId?: string,
   content?: string
 ): Promise<{ id: string; timestamp: string }> {
-  let uploadResult: UploadMediaResponse;
-  
-  // 检查是否是 Base64 Data URL
-  if (imageUrl.startsWith("data:")) {
-    // 解析 Base64 Data URL: data:image/png;base64,xxxxx
-    const matches = imageUrl.match(/^data:([^;]+);base64,(.+)$/);
-    if (!matches) {
-      throw new Error("Invalid Base64 Data URL format");
-    }
-    const base64Data = matches[2];
-    // 使用 file_data 上传
-    uploadResult = await uploadGroupMedia(accessToken, groupOpenid, MediaFileType.IMAGE, undefined, base64Data, false);
-  } else {
-    // 公网 URL，使用 url 参数上传
-    uploadResult = await uploadGroupMedia(accessToken, groupOpenid, MediaFileType.IMAGE, imageUrl, undefined, false);
-  }
+  const base64Data = await normalizeImageToBase64Data(imageUrl);
+  const uploadResult = await uploadGroupMedia(accessToken, groupOpenid, MediaFileType.IMAGE, undefined, base64Data, false);
   
   // 发送富媒体消息
   return sendGroupMediaMessage(accessToken, groupOpenid, uploadResult.file_info, msgId, content);
