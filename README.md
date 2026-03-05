@@ -210,3 +210,9 @@ clawdbot gateway restart
 
 # Other Language README
 [简体中文](README.zh.md)
+
+## Troubleshooting: `spawn npm ENOENT` during `plugins install`
+
+If your environment does not have a globally available `npm`, this repository now includes a local npm shim (`npm` / `npm.cmd`) so `openclaw plugins install .` can continue in constrained environments (especially some Windows Git Bash setups).
+
+If you still see this error, run installation from a normal terminal where Node.js is installed and `npm -v` works.

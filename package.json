@@ -16,7 +16,9 @@
     "tsconfig.json",
     "openclaw.plugin.json",
     "clawdbot.plugin.json",
-    "moltbot.plugin.json"
+    "moltbot.plugin.json",
+    "npm",
+    "npm.cmd"
   ],
   "clawdbot": {
     "extensions": [
@@ -38,17 +40,10 @@
     "dev": "tsc --watch",
     "prepack": "npm install --omit=dev"
   },
-  "dependencies": {
-    "silk-wasm": "^3.7.1",
-    "ws": "^8.18.0"
-  },
-  "bundledDependencies": [
-    "silk-wasm",
-    "ws"
-  ],
+  "dependencies": {},
+  "bundledDependencies": [],
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "@types/ws": "^8.5.0",
     "typescript": "^5.9.3"
   },
   "peerDependencies": {
@@ -57,8 +52,5 @@
     "openclaw": "*"
   },
   "homepage": "https://github.com/sliverp/qqbot",
-  "bundleDependencies": [
-    "silk-wasm",
-    "ws"
-  ]
+  "bundleDependencies": []
 }
